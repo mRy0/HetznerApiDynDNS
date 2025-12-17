@@ -10,3 +10,7 @@ Or
   "ZoneName": "example.net",
   "ARecordNames": [ "@", "www"]
 }
+
+
+Build:
+docker build -t hetzner-dyndns:latest .

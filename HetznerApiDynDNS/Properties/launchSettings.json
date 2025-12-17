@@ -4,11 +4,7 @@
       "commandName": "Project",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "APIKEY": "werbung",
-        "ZONENAME": "test",
-        "ARECORDNAMES__0": "foo",
-        "ARECORDNAMES__1": "bar"
+        "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
     "Container (Dockerfile)": {
