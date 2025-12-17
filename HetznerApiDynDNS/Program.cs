@@ -4,27 +4,45 @@ using Microsoft.Extensions.Configuration.KeyPerFile;
 using HetznerApiDynDNS;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using HetznerApiDynDNS.Tools;
 
-var builder = Host.CreateApplicationBuilder(args);
+var appBuilder = Host.CreateApplicationBuilder(args);
+var configBuilder = new ConfigurationBuilder();
 
-builder.Configuration
+configBuilder
     .AddCommandLine(args)
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddKeyPerFile("/run/secrets", optional: true)   // Docker Secrets
-    .AddEnvironmentVariables();                      // ENV gewinnt immer
+    .AddJsonFile($"appsettings.{appBuilder.Environment.EnvironmentName}.json", optional: true)
+    .AddKeyPerFile("/run/secrets", optional: true) 
+    .AddEnvironmentVariables(); 
 
-if (builder.Environment.IsDevelopment())
-    builder.Configuration.AddUserSecrets<Program>();
+if (appBuilder.Environment.IsDevelopment())
+    configBuilder.AddUserSecrets<Program>();
 
-builder.Services
+var config = configBuilder.Build();
+
+appBuilder.Services
     .AddOptions<AppConfig>()
-    .Bind(builder.Configuration)
+    .Bind(config)
     .ValidateOnStart();
 
-builder.Services.AddLogging(config =>
+var appConfig = config.Get<AppConfig>();
+
+if(appConfig is null)
+    throw new Exception("no config");
+
+if (string.IsNullOrWhiteSpace(appConfig.ApiKey))
+    throw new Exception("api key is empty");
+
+if (string.IsNullOrWhiteSpace(appConfig.ZoneName))
+    throw new Exception("no zone name");
+
+if (appConfig.ARecordNames is null || !appConfig.ARecordNames.Any())
+    throw new Exception("no records");
+
+
+appBuilder.Services.AddLogging(config =>
 {
     config.AddSimpleConsole(options =>
     {
@@ -34,16 +52,16 @@ builder.Services.AddLogging(config =>
     });
 });
 
+appBuilder.Services.AddHostedService<Updater>();
+var app = appBuilder.Build();
 
-builder.Services.AddHostedService<Updater>();
+var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("");
+logger.LogInformation($"apikey: {appConfig.ApiKey.MaskString()}");
+logger.LogInformation($"zonename: {appConfig.ZoneName}");
+logger.LogInformation($"A-records: {string.Join(',', appConfig.ARecordNames)}");
 
-var app = builder.Build();
-
-var config = app.Services.GetRequiredService<IOptions<AppConfig>>().Value;
-
-if (string.IsNullOrWhiteSpace(config.Hetzner.ApiKey))
-    throw new Exception("api key is empty");
 
 await app.RunAsync();
+
 
 

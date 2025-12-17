@@ -19,7 +19,7 @@ namespace HetznerApiDynDNS.Tools
         private static string ReqUpdateUrl(string zone, string recordName, string recordType) 
             => $"{API_URL}/zones/{zone}/rrsets/{recordName}/{recordType}/actions/set_records";
 
-        public async static Task <IEnumerable<Record>> GetRecordsForZone(string zoneName, string apiToken)
+        public async static Task <IEnumerable<Record>> GetRecordsForZone(string zoneName, string apiToken, CancellationToken cancellationToken)
         {            
             using var httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiToken}");
@@ -38,7 +38,7 @@ namespace HetznerApiDynDNS.Tools
             });
         }
 
-        public async static Task UpdateRecord (string zoneName, string apiToken, Record record)
+        public async static Task UpdateRecord (string zoneName, string apiToken, Record record, CancellationToken cancellationToken)
         {
             using var httpClient = new HttpClient();
             httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiToken}");

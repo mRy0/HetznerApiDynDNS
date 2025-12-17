@@ -31,7 +31,7 @@ namespace HetznerApiDynDNS
             {
                 try
                 {
-                    var currentIp = await Tools.IP.GetCurrentIP4();
+                    var currentIp = await Tools.IP.GetCurrentIP4(stoppingToken);
                     if (string.IsNullOrWhiteSpace(currentIp) || !IPAddress.TryParse(currentIp, out IPAddress addr))
                         throw new Exception($"current ip is null or wrong: {currentIp}");
 
@@ -43,35 +43,33 @@ namespace HetznerApiDynDNS
                     var serviceScope = _serviceProvider.CreateScope();
                     var config = serviceScope.ServiceProvider.GetRequiredService<IOptions<AppConfig>>().Value;
 
-                    foreach(var zone in config.Zones)
+                    var hetznerRecords = await Tools.HetznerAPI.GetRecordsForZone(config.ZoneName, config.ApiKey, stoppingToken);
+
+                    var recordsToUpdate = hetznerRecords.Where(
+                        x => x.FirstEntry != currentIp && 
+                        x.Type == "A" &&
+                        config.ARecordNames.Any(y => y == x.Name));
+
+                    foreach(var recordToUpdate in recordsToUpdate)
                     {
-                        if (string.IsNullOrWhiteSpace(zone.Name))
-                        {
-                            _logger.LogWarning("empty zone name");
-                            continue;
-                        }
+                        _logger.LogInformation($"updateing record - zone: {config.ZoneName} - record: {recordToUpdate.Name}/{recordToUpdate.Type}");
 
-                        var records = await Tools.HetznerAPI.GetRecordsForZone(zone.Name, config.Hetzner.ApiKey);
-                        var matchedRecords = records.Where(x => zone.Records.Any(y => y.Name == x.Name && y.Type == x.Type) && x.FirstEntry != currentIp);
-
-                        foreach(var recordToUpdate in matchedRecords)
+                        await Tools.HetznerAPI.UpdateRecord(config.ZoneName, config.ApiKey, new Models.Record()
                         {
-                            _logger.LogInformation($"updateing record - zone: {zone.Name} - record: {recordToUpdate.Name}/{recordToUpdate.Type}");
-                            await Tools.HetznerAPI.UpdateRecord(zone.Name, config.Hetzner.ApiKey, new Models.Record()
-                            {
-                                TTL = 60,
-                                FirstEntry = currentIp,
-                                Name = recordToUpdate.Name,
-                                Type = recordToUpdate.Type
-                            });
-                        }
+                            TTL = recordToUpdate.TTL,
+                            FirstEntry = currentIp,
+                            Name = recordToUpdate.Name,
+                            Type = recordToUpdate.Type
+                        }, 
+                        stoppingToken
+                        );
                     }
 
                     lastIp = currentIp;
                 }
                 catch(Exception ex)
                 {
-                    _logger.LogError(ex, ex.Message);
+                    _logger.LogError(ex.Message);
                 }
                 finally
                 {
